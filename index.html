@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendário de Lançamentos de Cassino</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Fontes do Google -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script>
+        // Configuração do Tailwind para usar a fonte Inter
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Estilos Customizados */
+        body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+        @keyframes move { 100% { transform: translate3d(0, 0, 1px) rotate(360deg); } }
+        .particle { position: absolute; border-radius: 50%; background: rgba(129, 140, 248, 0.2); animation: move linear infinite; transform-origin: center center; }
+        
+        /* Animação para o Toast */
+        .toast-enter { transform: translateY(100%); opacity: 0; }
+        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 300ms ease-out; }
+        .toast-exit { transform: translateY(0); opacity: 1; }
+        .toast-exit-active { transform: translateY(100%); opacity: 0; transition: all 300ms ease-in; }
+
+        /* Animação para o Destaque no Dia */
+        @keyframes flash-red {
+            50% { background-color: #ef4444; } /* Apenas o pico da animação é vermelho */
+        }
+        .day-highlight {
+            animation: flash-red 1.5s infinite ease-in-out;
+        }
+
+        /* Animação para o Destaque no Card do Jogo */
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 5px #ef4444; }
+            50% { box-shadow: 0 0 20px #ef4444, 0 0 30px #ef4444; }
+        }
+        .card-highlight {
+            border: 1px solid #ef4444;
+            animation: glow 1.5s infinite ease-in-out;
+        }
+
+        /* --- ESTILOS PARA O CARROSSEL --- */
+        .carousel-container {
+            overflow: hidden;
+            width: 100%;
+            cursor: grab; /* MUDANÇA: Cursor para indicar que é arrastável */
+        }
+        .carousel-container.grabbing {
+            cursor: grabbing; /* MUDANÇA: Cursor durante o arraste */
+        }
+        .carousel-wrapper {
+            display: flex;
+            transition: transform 0.5s ease-in-out;
+        }
+        .carousel-slide {
+            flex: 0 0 calc(100% / 3); /* Mostra 3 slides por vez */
+            box-sizing: border-box;
+            padding: 0 8px;
+            position: relative;
+        }
+        /* MUDANÇA: Impede que a imagem seja arrastada separadamente */
+        .carousel-slide img {
+            width: 100%;
+            height: 120px; 
+            object-fit: cover;
+            border-radius: 0.5rem;
+            border: 2px solid transparent;
+            transition: border-color 0.3s;
+            pointer-events: none; /* Impede eventos de mouse na imagem */
+        }
+        .carousel-slide:hover img {
+            border-color: #818cf8; /* indigo-400 */
+        }
+        .carousel-slide .slide-title {
+            position: absolute;
+            bottom: 0;
+            left: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 4px 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-align: center;
+            border-bottom-left-radius: 0.5rem;
+            border-bottom-right-radius: 0.5rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        @media (max-width: 1024px) {
+            .carousel-slide { flex: 0 0 50%; } /* Mostra 2 slides em telas médias */
+        }
+        @media (max-width: 640px) {
+            .carousel-slide { flex: 0 0 100%; } /* Mostra 1 slide em telas pequenas */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans overflow-x-hidden">
+
+    <!-- Efeito de Partículas no Fundo -->
+    <div id="particles-js" class="absolute inset-0 z-0 overflow-hidden"></div>
+
+    <!-- Conteúdo Principal -->
+    <main class="relative z-10 max-w-6xl mx-auto p-4 md:p-8">
+        <!-- --- HEADER MODIFICADO --- -->
+        <header class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <!-- Carrossel de Destaques -->
+            <div id="highlight-carousel" class="carousel-container w-full md:w-2/3">
+                <div id="carousel-wrapper" class="carousel-wrapper">
+                    <!-- Slides serão inseridos aqui pelo JS -->
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <button id="add-game-btn" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors font-semibold flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                    Adicionar Jogo
+                </button>
+                <button id="prev-btn" class="px-4 py-2 bg-gray-700 hover:bg-indigo-500 rounded-lg transition-colors">‹‹</button>
+                <button id="today-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors font-semibold">Hoje</button>
+                <button id="next-btn" class="px-4 py-2 bg-gray-700 hover:bg-indigo-500 rounded-lg transition-colors">››</button>
+            </div>
+        </header>
+
+        <!-- Seção de Controles (Pesquisa e Filtros) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+            <!-- Pesquisa -->
+            <div class="relative">
+                <label for="search-input" class="block text-sm font-medium text-gray-300 mb-1">Pesquisar por Jogo:</label>
+                <input type="text" id="search-input" placeholder="Digite o nome do jogo..." class="w-full bg-gray-700 text-white placeholder-gray-400 rounded-lg p-2 border-2 border-transparent focus:border-indigo-500 focus:ring-0 transition">
+                <div id="autocomplete-list" class="absolute z-20 w-full bg-gray-700 rounded-b-lg mt-1 max-h-60 overflow-y-auto hidden"></div>
+            </div>
+            <!-- Filtro Retrátil -->
+            <div class="relative">
+                 <label for="toggle-filter-btn" class="block text-sm font-medium text-gray-300 mb-1">Filtrar por Provedor:</label>
+                <button id="toggle-filter-btn" class="w-full flex justify-between items-center bg-gray-700 rounded-lg p-2">
+                    <span id="filter-label">Todos os Provedores</span>
+                    <svg id="filter-chevron" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                </button>
+                <div id="filter-options" class="absolute hidden z-20 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-4 max-h-60 overflow-y-auto">
+                    <div id="filters-container" class="flex flex-wrap gap-2"><div class="text-gray-400">Carregando filtros...</div></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="calendars-container" class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="text-center md:col-span-2 text-gray-400">Carregando calendários...</div></div>
+    </main>
+
+    <!-- Modal de Visualização -->
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 hidden"><div id="modal-content" class="bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6"></div></div>
+    
+    <!-- Modal de Adicionar Jogo -->
+    <div id="add-game-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 hidden">
+        <form id="add-game-form" class="bg-gray-800 rounded-lg shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto p-6 space-y-4">
+            <h3 class="text-2xl font-bold text-indigo-300 mb-4">Adicionar Novo Lançamento</h3>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div><label class="block text-sm font-medium text-gray-300">Data</label><input type="date" name="data" required class="w-full bg-gray-700 rounded-lg p-2 mt-1 text-white" style="color-scheme: dark;"></div>
+                <div><label class="block text-sm font-medium text-gray-300">Provedor</label><select name="provedor" required class="w-full bg-gray-700 rounded-lg p-2 mt-1 text-white"></select></div>
+            </div>
+            <div><label class="block text-sm font-medium text-gray-300">Jogo</label><input type="text" name="jogo" required class="w-full bg-gray-700 rounded-lg p-2 mt-1"></div>
+            <div><label class="block text-sm font-medium text-gray-300">Tipo de jogo</label><input type="text" name="tipodejogo" class="w-full bg-gray-700 rounded-lg p-2 mt-1"></div>
+            <div><label class="block text-sm font-medium text-gray-300">Imagem (URL)</label><input type="url" name="imagem" placeholder="https://..." class="w-full bg-gray-700 rounded-lg p-2 mt-1"></div>
+            <div><label class="block text-sm font-medium text-gray-300">Imagem do Provedor (URL)</label><input type="url" name="imagemprovedor" placeholder="Selecione um provedor para preencher" readonly class="w-full bg-gray-600 rounded-lg p-2 mt-1"></div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div><label class="block text-sm font-medium text-gray-300">Volatilidade</label><div id="add-volatility-meter" class="w-full h-8 grid grid-cols-4 gap-1 mt-1"></div><input type="hidden" name="volatilidade"></div>
+                <div class="space-y-2">
+                    <div><label class="block text-sm font-medium text-gray-300">Certificado</label><div class="flex gap-4 mt-2"><label class="flex items-center"><input type="radio" name="certificado" value="Sim" class="mr-2">Sim</label><label class="flex items-center"><input type="radio" name="certificado" value="Não" class="mr-2" checked>Não</label></div></div>
+                    <div><label class="block text-sm font-medium text-gray-300">Ativo no site?</label><div class="flex gap-4 mt-2"><label class="flex items-center"><input type="radio" name="ativonosite" value="Sim" class="mr-2">Sim</label><label class="flex items-center"><input type="radio" name="ativonosite" value="Não" class="mr-2" checked>Não</label></div></div>
+                    <div><label class="block text-sm font-medium text-gray-300">Destaque?</label><div class="flex gap-4 mt-2"><label class="flex items-center"><input type="radio" name="destaque" value="S" class="mr-2">Sim</label><label class="flex items-center"><input type="radio" name="destaque" value="N" class="mr-2" checked>Não</label></div></div>
+                </div>
+            </div>
+
+            <div><label class="block text-sm font-medium text-gray-300">Senha</label><input type="password" name="password" required class="w-full bg-gray-700 rounded-lg p-2 mt-1"></div>
+
+            <div class="flex justify-end gap-4 pt-4">
+                <button type="button" id="cancel-add-game-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold">Salvar Jogo</button>
+            </div>
+        </form>
+    </div>
+
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQQk-IDWP9oauY9CnyZUrXj7FCCDm03ZcYkedQSCyeiN6SytQqtqO511YRFWD1mB_rbTi2WqlKE3Vpk/pub?gid=0&single=true&output=csv';
+            const PROVIDERS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQQk-IDWP9oauY9CnyZUrXj7FCCDm03ZcYkedQSCyeiN6SytQqtqO511YRFWD1mB_rbTi2WqlKE3Vpk/pub?gid=992976903&single=true&output=csv';
+            const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxoRyDpGjtgXfmtTjakc5BNzMkrTE202gULEIHmXhY9DiynVyCTkvBMH-KoWrwahlsg/exec"; 
+            const PLACEHOLDER_IMAGE = 'https://placehold.co/400x300/2A2E3B/FFFFFF?text=Sem+Imagem';
+            const PLACEHOLDER_PROVIDER_IMAGE = 'https://placehold.co/100x40/374151/FFFFFF?text=Provedor';
+            let events = [], allProviders = [], providerData = [], selectedProviders = ['All'], searchQuery = '', currentDate = new Date(2025, 0, 1);
+            let carouselInterval = null;
+            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"], weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+            
+            const domRefs = {
+                calendarsContainer: document.getElementById('calendars-container'), filtersContainer: document.getElementById('filters-container'), searchInput: document.getElementById('search-input'), autocompleteList: document.getElementById('autocomplete-list'), prevBtn: document.getElementById('prev-btn'), nextBtn: document.getElementById('next-btn'), todayBtn: document.getElementById('today-btn'), modal: document.getElementById('modal'), modalContent: document.getElementById('modal-content'), particlesContainer: document.getElementById('particles-js'), toastContainer: document.getElementById('toast-container'), addGameModal: document.getElementById('add-game-modal'), addGameBtn: document.getElementById('add-game-btn'), cancelAddGameBtn: document.getElementById('cancel-add-game-btn'), addGameForm: document.getElementById('add-game-form'), addVolatilityMeter: document.getElementById('add-volatility-meter'), toggleFilterBtn: document.getElementById('toggle-filter-btn'), filterOptions: document.getElementById('filter-options'), filterLabel: document.getElementById('filter-label'), filterChevron: document.getElementById('filter-chevron'),
+                carouselContainer: document.getElementById('highlight-carousel'),
+                carouselWrapper: document.getElementById('carousel-wrapper') 
+            };
+
+            const showToast = (message, type = 'success') => {
+                const toast = document.createElement('div');
+                const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+                toast.className = `${bgColor} text-white py-2 px-4 rounded-lg shadow-lg toast-enter`;
+                toast.textContent = message;
+                domRefs.toastContainer.appendChild(toast);
+                requestAnimationFrame(() => toast.classList.add('toast-enter-active'));
+                setTimeout(() => {
+                    toast.classList.remove('toast-enter-active');
+                    toast.classList.add('toast-exit-active');
+                    toast.addEventListener('transitionend', () => toast.remove());
+                }, 3000);
+            };
+            
+            const preloadImages = (eventsToLoad) => {
+                eventsToLoad.forEach(event => {
+                    if (event.gameImage && event.gameImage !== PLACEHOLDER_IMAGE) (new Image()).src = event.gameImage;
+                    if (event.providerImage && event.providerImage !== PLACEHOLDER_PROVIDER_IMAGE) (new Image()).src = event.providerImage;
+                });
+            };
+
+            const createVolatilityMeterHTML = (level, gameName) => {
+                const levels = { baixo: 'Baixa', medio: 'Média', alto: 'Alta', 'muito alto': 'Muito Alta' };
+                const colors = { baixo: 'bg-green-500', medio: 'bg-yellow-500', alto: 'bg-orange-500', 'muito alto': 'bg-red-500'};
+                const normalizedLevel = (level || '').toLowerCase().trim().replace('é', 'e');
+                let barsHTML = Object.keys(levels).map((key) => {
+                    const isActive = Object.keys(levels).indexOf(normalizedLevel) >= Object.keys(levels).indexOf(key);
+                    return `<div class="h-full rounded cursor-pointer ${isActive ? colors[key] : 'bg-gray-600 hover:bg-gray-500'}" data-action="updateField" data-field-type="volatility" data-level="${key}" data-game-name="${gameName}" title="Definir volatilidade como ${levels[key]}"></div>`;
+                }).join('');
+                return `<div><span class="text-sm font-semibold text-gray-300">Volatilidade: ${levels[normalizedLevel] || 'N/D'}</span><div class="w-full h-4 grid grid-cols-4 gap-1 mt-1">${barsHTML}</div></div>`;
+            };
+            
+            const getFilteredEvents = () => events.filter(event => (selectedProviders.includes('All') || selectedProviders.includes(event.provider)) && (!searchQuery || event.game.toLowerCase().includes(searchQuery.toLowerCase())));
+            
+            const renderFilters = () => {
+                domRefs.filtersContainer.innerHTML = '';
+                allProviders.forEach(provider => {
+                    const button = document.createElement('button');
+                    button.textContent = provider;
+                    button.className = `px-3 py-1 text-sm rounded-full transition-all duration-200 ${selectedProviders.includes(provider) ? 'bg-indigo-500 text-white shadow-lg' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`;
+                    button.onclick = () => handleProviderToggle(provider);
+                    domRefs.filtersContainer.appendChild(button);
+                });
+                updateFilterLabel();
+            };
+
+            const renderCalendars = () => {
+                domRefs.calendarsContainer.innerHTML = '';
+                const calendarData = [{ year: currentDate.getFullYear(), month: currentDate.getMonth() }];
+                const nextMonthDate = new Date(currentDate);
+                nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+                calendarData.push({ year: nextMonthDate.getFullYear(), month: nextMonthDate.getMonth() });
+                const filteredEvents = getFilteredEvents();
+                const visibleEvents = filteredEvents.filter(event => calendarData.some(cal => cal.year === event.date.getFullYear() && cal.month === event.date.getMonth()));
+                preloadImages(visibleEvents);
+                calendarData.forEach(({ year, month }) => domRefs.calendarsContainer.insertAdjacentHTML('beforeend', createCalendarHTML(year, month, filteredEvents)));
+                domRefs.calendarsContainer.querySelectorAll('.calendar-day').forEach(dayCell => {
+                    const day = parseInt(dayCell.dataset.day);
+                    const dayEvents = getFilteredEvents().filter(e => e.date.getFullYear() === parseInt(dayCell.dataset.year) && e.date.getMonth() === parseInt(dayCell.dataset.month) && e.date.getDate() === day);
+                    if (dayEvents.length > 0) dayCell.onclick = () => renderModal(new Date(dayCell.dataset.year, dayCell.dataset.month, day), dayEvents);
+                });
+            };
+
+            const createCalendarHTML = (year, month, filteredEvents) => {
+                let daysHTML = '';
+                const firstDayOfMonth = new Date(year, month, 1).getDay();
+                for (let i = 0; i < firstDayOfMonth; i++) daysHTML += `<div class="p-2"></div>`;
+                for (let day = 1; day <= new Date(year, month + 1, 0).getDate(); day++) {
+                    const dayEvents = filteredEvents.filter(e => e.date.getFullYear() === year && e.date.getMonth() === month && e.date.getDate() === day);
+                    const isToday = new Date().toDateString() === new Date(year, month, day).toDateString();
+                    const isSearched = searchQuery && dayEvents.length > 0;
+                    const hasHighlight = dayEvents.some(e => e.destaque && e.destaque.toLowerCase() === 's');
+                    
+                    const dayClasses = `calendar-day relative p-2 rounded-lg transition-colors duration-200 aspect-square flex items-center justify-center 
+                        ${dayEvents.length > 0 ? 'cursor-pointer hover:bg-indigo-700 bg-gray-700' : 'text-gray-500'} 
+                        ${isToday ? 'bg-indigo-500 !text-white font-bold' : ''} 
+                        ${isSearched ? '!bg-green-500 ring-2 ring-white' : ''}
+                        ${hasHighlight ? 'day-highlight' : ''}`;
+
+                    daysHTML += `<div class="${dayClasses}" data-day="${day}" data-month="${month}" data-year="${year}"><span>${day}</span>${dayEvents.length > 0 ? `<span class="absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center shadow-md">${dayEvents.length}</span>` : ''}</div>`;
+                }
+                return `<div class="bg-gray-800 bg-opacity-50 backdrop-blur-sm p-4 rounded-lg shadow-2xl"><h2 class="text-xl font-bold text-center mb-4 text-indigo-300">${monthNames[month]} ${year}</h2><div class="grid grid-cols-7 gap-1 text-center">${weekDays.map(d => `<div class="font-semibold text-xs text-gray-400">${d}</div>`).join('')}${daysHTML}</div></div>`;
+            };
+            
+            const renderModal = (date, dayEvents) => {
+                renderModalContent(date, dayEvents);
+                domRefs.modal.classList.remove('hidden');
+            };
+
+            const renderModalContent = (date, dayEvents) => {
+                domRefs.modalContent.innerHTML = `<div class="flex justify-between items-center mb-4"><h3 class="text-2xl font-bold text-indigo-300">Lançamentos de ${date.getDate()} de ${monthNames[date.getMonth()]}</h3><button id="close-modal-btn" class="text-gray-400 hover:text-white text-2xl">&times;</button></div><div class="space-y-4">${dayEvents.map(event => createEventCardHTML(event)).join('')}</div>`;
+                
+                document.getElementById('close-modal-btn').onclick = closeModal;
+
+                domRefs.modalContent.querySelectorAll('[data-action="updateField"]').forEach(element => {
+                    const { gameName, fieldName, currentValue, fieldType } = element.dataset;
+                    if (fieldType === 'toggle') {
+                        const newValue = fieldName === 'Destaque' ? (currentValue.toLowerCase() === 's' ? 'N' : 'S') : (currentValue.toLowerCase() === 'sim' ? 'Não' : 'Sim');
+                        element.onclick = () => promptForFieldUpdate(gameName, fieldName, newValue);
+                    } else if (fieldType === 'volatility') {
+                        const event = dayEvents.find(e => e.game === gameName);
+                        if(event) element.onclick = () => promptForVolatilityChange(gameName, element.dataset.level, event.volatility);
+                    }
+                });
+
+                domRefs.modalContent.querySelectorAll('.delete-game-btn').forEach(btn => {
+                    btn.onclick = () => promptForGameDeletion(btn.dataset.gameName);
+                });
+            };
+            
+            const createEventCardHTML = (event) => {
+                const statusHTML = (label, text, condition, fieldName, valueForTrue = 'Sim', valueForFalse = 'Não') => `
+                    <div class="flex items-center gap-2 cursor-pointer ${condition ? 'text-green-400' : 'text-red-400'}"
+                         data-action="updateField" data-field-type="toggle" data-game-name="${event.game}"
+                         data-field-name="${fieldName}" data-current-value="${condition ? valueForTrue : valueForFalse}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">${condition ? '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />' : '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />'}</svg>
+                        <span>${label}: ${text}</span>
+                    </div>`;
+                
+                const activeInfo = statusHTML('Ativo na H2Bet', event.activeOnSite.toLowerCase() === 'sim' ? 'Sim' : 'Não', event.activeOnSite.toLowerCase() === 'sim', 'Ativo no site?');
+                const certInfo = statusHTML('Certificado', event.certificate.toLowerCase() === 'sim' ? 'Sim' : 'Não', event.certificate.toLowerCase() === 'sim', 'Certificado');
+                const isHighlight = event.destaque && event.destaque.toLowerCase() === 's';
+                const destaqueInfo = statusHTML('Destaque', isHighlight ? 'Sim' : 'Não', isHighlight, 'Destaque', 'S', 'N');
+                const volatilityMeter = createVolatilityMeterHTML(event.volatility, event.game);
+
+                const cardClasses = `bg-gray-700 p-4 rounded-lg flex flex-col md:flex-row gap-4 relative group ${isHighlight ? 'card-highlight' : ''}`;
+
+                return `<div class="${cardClasses}"><div class="w-full md:w-48 h-48 flex-shrink-0 flex items-center justify-center"><img src="${event.gameImage}" alt="Imagem do jogo ${event.game}" class="max-w-full max-h-full object-contain rounded-md" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMAGE}';"></div><div class="flex-1 flex flex-col"><div><h4 class="text-xl font-bold text-white">${event.game}</h4><p class="text-sm bg-indigo-500 inline-block px-2 py-0.5 rounded-full my-2">${event.gameType}</p></div><div class="flex-grow grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2"><div class="space-y-2">${activeInfo}${certInfo}${destaqueInfo}</div><div>${volatilityMeter}</div></div><div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-600"><img src="${event.providerImage}" alt="Logo de ${event.provider}" class="h-10 object-contain bg-gray-800 p-1 rounded" onerror="this.onerror=null;this.src='${PLACEHOLDER_PROVIDER_IMAGE}';"><span class="text-gray-300 font-semibold">${event.provider}</span></div></div><button class="delete-game-btn absolute top-2 right-2 p-2 bg-red-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" data-game-name="${event.game}" title="Remover Jogo"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg></button></div>`;
+            };
+
+            const closeModal = () => domRefs.modal.classList.add('hidden');
+            const openAddGameModal = () => { domRefs.addGameForm.reset(); populateProviderDropdown(); renderAddVolatilityMeter(); domRefs.addGameModal.classList.remove('hidden'); };
+            const closeAddGameModal = () => domRefs.addGameModal.classList.add('hidden');
+            
+            const populateProviderDropdown = () => {
+                const select = domRefs.addGameForm.querySelector('[name="provedor"]');
+                select.innerHTML = '<option value="">Selecione um provedor</option>';
+                providerData.forEach(provider => {
+                    const option = document.createElement('option');
+                    option.value = provider.name;
+                    option.textContent = provider.name;
+                    select.appendChild(option);
+                });
+            };
+            
+            const handleProviderSelection = (e) => {
+                const selectedProviderName = e.target.value;
+                const provider = providerData.find(p => p.name === selectedProviderName);
+                const imageUrlInput = domRefs.addGameForm.querySelector('[name="imagemprovedor"]');
+                imageUrlInput.value = provider ? provider.link : '';
+            };
+
+            const renderAddVolatilityMeter = (selectedLevel = '') => {
+                 const levels = { baixo: 'Baixa', medio: 'Média', alto: 'Alta', 'muito alto': 'Muito Alta' };
+                 domRefs.addVolatilityMeter.innerHTML = Object.keys(levels).map(key => `<div class="h-full rounded cursor-pointer ${key === selectedLevel ? {baixo:'bg-green-500',medio:'bg-yellow-500',alto:'bg-orange-500','muito alto':'bg-red-500'}[key] : 'bg-gray-600 hover:bg-gray-500'}" data-level="${key}" title="${levels[key]}"></div>`).join('');
+                 domRefs.addGameForm.querySelector('[name="volatilidade"]').value = selectedLevel;
+                 domRefs.addVolatilityMeter.querySelectorAll('[data-level]').forEach(bar => bar.onclick = () => renderAddVolatilityMeter(domRefs.addGameForm.querySelector('[name="volatilidade"]').value === bar.dataset.level ? '' : bar.dataset.level));
+            };
+            
+            const promptForVolatilityChange = (gameName, clickedLevel, currentVolatility) => {
+                const newLevel = clickedLevel === (currentVolatility || '').toLowerCase().trim().replace('é', 'e') ? '' : clickedLevel;
+                promptForFieldUpdate(gameName, 'Volatilidade', newLevel);
+            };
+            
+            const promptForFieldUpdate = (gameName, fieldName, newValue) => {
+                const password = prompt(`Para alterar '${fieldName}' de "${gameName}", insira a senha:`);
+                if (password) { 
+                    updateSheetField(gameName, fieldName, newValue, password);
+                }
+            };
+
+            const promptForGameDeletion = (gameName) => {
+                if (!confirm(`Tem certeza que deseja remover "${gameName}"?`)) return;
+                const password = prompt(`Para confirmar a remoção, insira a senha:`);
+                if (password) {
+                    deleteGameInSheet(gameName, password);
+                }
+            };
+            
+            const sendApiRequest = async (action, data) => {
+                if (action !== 'updateField') {
+                    showToast('Processando...', 'success');
+                }
+                try {
+                    const response = await fetch(APPS_SCRIPT_URL, {
+                        method: 'POST', mode: 'cors', headers: {'Content-Type': 'text/plain;charset=utf-8'},
+                        body: JSON.stringify({ action, ...data })
+                    });
+                    const result = await response.json();
+                    if (result.status === "success") {
+                        showToast(result.message, 'success');
+                        return result;
+                    } else { throw new Error(result.message); }
+                } catch (error) {
+                    showToast(`Erro: ${error.message}`, 'error');
+                    throw error;
+                }
+            };
+            
+            const updateSheetField = async (gameName, fieldName, newValue, password) => {
+                const eventIndex = events.findIndex(e => e.game === gameName);
+                if (eventIndex === -1) return showToast('Erro: Jogo não encontrado localmente.', 'error');
+                
+                const keyMap = { 'Destaque': 'destaque', 'Certificado': 'certificate', 'Ativo no site?': 'activeOnSite', 'Volatilidade': 'volatility' };
+                const keyToUpdate = keyMap[fieldName];
+                if (!keyToUpdate) return showToast(`Erro: Campo desconhecido '${fieldName}'.`, 'error');
+
+                const originalValue = events[eventIndex][keyToUpdate];
+
+                events[eventIndex][keyToUpdate] = newValue;
+
+                renderCalendars();
+                renderCarousel(); 
+                const updatedEvent = events[eventIndex];
+                const dayEvents = events.filter(e => e.date.toDateString() === updatedEvent.date.toDateString());
+                renderModalContent(updatedEvent.date, dayEvents);
+
+                try {
+                    await sendApiRequest('updateField', { gameName, fieldName, newValue, password });
+                } catch (error) {
+                    showToast(`Falha ao salvar: ${error.message}. Revertendo.`, 'error');
+                    events[eventIndex][keyToUpdate] = originalValue; 
+                    renderCalendars();
+                    renderCarousel(); 
+                    renderModalContent(updatedEvent.date, dayEvents);
+                }
+            };
+
+            const deleteGameInSheet = async (gameName, password) => {
+                try {
+                    await sendApiRequest('deleteGame', { gameName, password });
+                    await fetchData(); 
+                    closeModal();
+                } catch (error) {/* Ignora, toast já foi mostrado */}
+            };
+            
+            const handleAddGameSubmit = async (e) => {
+                e.preventDefault();
+                const formData = new FormData(domRefs.addGameForm);
+                const password = formData.get('password');
+                if (!password) { return showToast('Por favor, insira a senha.', 'error'); }
+                
+                const rawDate = formData.get('data');
+                const [year, month, day] = rawDate.split('-');
+                
+                const gameData = {
+                    data: `${day}/${month}/${year}`,
+                    provedor: formData.get('provedor'),
+                    jogo: formData.get('jogo'),
+                    tipodejogo: formData.get('tipodejogo'),
+                    imagem: formData.get('imagem'),
+                    imagemprovedor: formData.get('imagemprovedor'),
+                    volatilidade: formData.get('volatilidade'),
+                    certificado: formData.get('certificado'),
+                    ativonosite: formData.get('ativonosite'),
+                    destaque: formData.get('destaque')
+                };
+
+                try {
+                    await sendApiRequest('addGame', { password, gameData });
+                    closeAddGameModal();
+                    await fetchData(); 
+                } catch (error) {/* Ignora, toast já foi mostrado */}
+            };
+            
+            const updateFilterLabel = () => {
+                if (selectedProviders.length === 0 || selectedProviders.includes('All')) {
+                    domRefs.filterLabel.textContent = 'Todos os Provedores';
+                } else if (selectedProviders.length === 1) {
+                    domRefs.filterLabel.textContent = selectedProviders[0];
+                } else {
+                    domRefs.filterLabel.textContent = `${selectedProviders.length} provedores selecionados`;
+                }
+            };
+            
+            const handleProviderToggle = (provider) => {
+                if (provider === 'All') {
+                    selectedProviders = ['All'];
+                } else {
+                    let newSelection = selectedProviders.filter(p => p !== 'All');
+                    if (newSelection.includes(provider)) {
+                        newSelection = newSelection.filter(p => p !== provider);
+                    } else {
+                        newSelection.push(provider);
+                    }
+                    selectedProviders = newSelection.length === 0 ? ['All'] : newSelection;
+                }
+                renderFilters();
+                renderCalendars();
+            };
+            
+            const handleSearchInput = (e) => {
+                searchQuery = e.target.value;
+                const suggestions = getFilteredEvents().slice(0, 5);
+                if (searchQuery && suggestions.length > 0) {
+                    domRefs.autocompleteList.innerHTML = suggestions.map(event => `<div class="p-2 hover:bg-indigo-600 cursor-pointer" data-game="${event.game}">${event.game}</div>`).join('');
+                    domRefs.autocompleteList.classList.remove('hidden');
+                } else {
+                    domRefs.autocompleteList.classList.add('hidden');
+                }
+                renderCalendars();
+            };
+            
+            const handleSuggestionClick = (e) => {
+                if (e.target.dataset.game) {
+                    const selectedGame = e.target.dataset.game;
+                    domRefs.searchInput.value = selectedGame;
+                    searchQuery = selectedGame;
+                    domRefs.autocompleteList.classList.add('hidden');
+                    const event = events.find(ev => ev.game === selectedGame);
+                    if (event) { currentDate = new Date(event.date.getFullYear(), event.date.getMonth(), 1); }
+                    renderCalendars();
+                }
+            };
+
+            // --- LÓGICA DO CARROSSEL COM ARRASTE ---
+
+            const renderCarousel = () => {
+                if (carouselInterval) clearInterval(carouselInterval);
+                
+                const getUniqueCarouselEvents = () => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    const twoDaysAgo = new Date(today);
+                    twoDaysAgo.setDate(today.getDate() - 2);
+
+                    const highlightEvents = events
+                        .filter(event => 
+                            event.destaque.toLowerCase() === 's' && event.date >= twoDaysAgo
+                        )
+                        .sort((a, b) => a.date - b.date);
+
+                    const uniqueGames = new Map();
+                    for (const event of highlightEvents) {
+                        if (!uniqueGames.has(event.game)) {
+                            uniqueGames.set(event.game, event);
+                        }
+                    }
+                    
+                    return Array.from(uniqueGames.values());
+                };
+                
+                const carouselEvents = getUniqueCarouselEvents();
+
+                if (carouselEvents.length === 0) {
+                    domRefs.carouselWrapper.innerHTML = '<div class="text-center w-full text-gray-400 p-8">Nenhum jogo em destaque.</div>';
+                    return;
+                }
+                
+                const getVisibleSlidesCount = () => {
+                    if (window.innerWidth <= 640) return 1;
+                    if (window.innerWidth <= 1024) return 2;
+                    return 3;
+                }
+                const numVisibleSlides = getVisibleSlidesCount();
+                const enableInfiniteScroll = carouselEvents.length > numVisibleSlides;
+
+                let slides = carouselEvents;
+                if (enableInfiniteScroll) {
+                    slides = [...carouselEvents, ...carouselEvents.slice(0, numVisibleSlides)];
+                }
+                
+                domRefs.carouselWrapper.innerHTML = slides.map(event => `
+                    <div class="carousel-slide" data-gamedate="${event.date.toISOString()}">
+                        <img src="${event.gameImage}" alt="${event.game}" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMAGE}';">
+                        <div class="slide-title">${event.game}</div>
+                    </div>
+                `).join('');
+                
+                domRefs.carouselWrapper.style.transform = `translateX(0)`;
+                domRefs.carouselWrapper.style.transition = 'none';
+
+                if (enableInfiniteScroll) {
+                    let currentIndex = 0;
+                    const totalUniqueSlides = carouselEvents.length;
+                    
+                    const startAutoScroll = () => {
+                        if (carouselInterval) clearInterval(carouselInterval);
+                        carouselInterval = setInterval(advanceCarousel, 3000);
+                    };
+
+                    const advanceCarousel = () => {
+                        if (domRefs.carouselWrapper.children.length === 0) return;
+                        const slideWidth = domRefs.carouselWrapper.children[0].getBoundingClientRect().width;
+                        if (slideWidth === 0) return;
+
+                        currentIndex++;
+                        domRefs.carouselWrapper.style.transition = 'transform 0.5s ease-in-out';
+                        domRefs.carouselWrapper.style.transform = `translateX(-${currentIndex * slideWidth}px)`;
+
+                        if (currentIndex >= totalUniqueSlides) {
+                            setTimeout(() => {
+                                domRefs.carouselWrapper.style.transition = 'none';
+                                currentIndex = 0;
+                                domRefs.carouselWrapper.style.transform = `translateX(0)`;
+                            }, 500);
+                        }
+                    };
+                    startAutoScroll();
+                }
+            };
+
+            const handleCarouselClick = (e) => {
+                const slide = e.target.closest('.carousel-slide');
+                if (!slide || slide.dataset.dragged === 'true') {
+                    if(slide) delete slide.dataset.dragged;
+                    return;
+                };
+
+                const dateString = slide.dataset.gamedate;
+                const eventDate = new Date(dateString);
+
+                currentDate = new Date(eventDate.getFullYear(), eventDate.getMonth(), 1);
+                renderCalendars();
+
+                const dayEvents = events.filter(ev => ev.date.toDateString() === eventDate.toDateString());
+                if (dayEvents.length > 0) {
+                    renderModal(eventDate, dayEvents);
+                }
+            };
+            
+            const fetchData = async () => {
+                try {
+                    const [eventsResponse, providersResponse] = await Promise.all([
+                        fetch(`${CSV_URL}&cache_bust=${new Date().getTime()}`),
+                        fetch(`${PROVIDERS_CSV_URL}&cache_bust=${new Date().getTime()}`)
+                    ]);
+                    
+                    const providersCsvText = await providersResponse.text();
+                    const providerLines = providersCsvText.split('\r\n').slice(1);
+                    providerData = providerLines.map(line => {
+                        const [name, link] = line.split(',').map(c => c.trim().replace(/"/g, ''));
+                        return name && link ? { name, link } : null;
+                    }).filter(Boolean);
+
+                    const csvText = await eventsResponse.text();
+                    const allLines = csvText.split('\r\n');
+                    const header = allLines.shift().split(',').map(h => h.trim().replace(/"/g, ''));
+                    const headerMap = header.reduce((acc, curr, index) => ({...acc, [curr]: index }), {});
+
+                    events = allLines.map(line => {
+                        const columns = line.split(',').map(c => c.trim().replace(/"/g, ''));
+                        if (columns.length < header.length) return null;
+                        
+                        const data = {};
+                        Object.keys(headerMap).forEach(key => data[key] = columns[headerMap[key]]);
+                        
+                        const [day, month, year] = data.Data.split('/');
+                        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+
+                        if (!data.Data || !data.Provedor || !data.Jogo || isNaN(date.getTime())) return null;
+
+                        return { 
+                            date, 
+                            provider: data.Provedor, 
+                            game: data.Jogo, 
+                            gameType: data['Tipo de jogo'], 
+                            gameImage: (data.Imagem && data.Imagem.startsWith('http')) ? data.Imagem : PLACEHOLDER_IMAGE, 
+                            providerImage: (data['Imagem provedor'] && data['Imagem provedor'].startsWith('http')) ? data['Imagem provedor'] : PLACEHOLDER_PROVIDER_IMAGE, 
+                            certificate: data.Certificado || 'Não', 
+                            activeOnSite: data['Ativo no site?'] || 'Não', 
+                            volatility: data.Volatilidade || 'N/D',
+                            destaque: data.Destaque || 'N'
+                        };
+                    }).filter(Boolean);
+
+                    allProviders = ['All', ...new Set(events.map(e => e.provider).filter(p => p))];
+                    renderFilters();
+                    renderCalendars();
+                    renderCarousel();
+                } catch (error) {
+                    console.error("Erro ao buscar dados:", error);
+                    domRefs.calendarsContainer.innerHTML = `<div class="text-center md:col-span-2 text-red-400">Falha ao carregar dados.</div>`;
+                }
+            };
+
+            const renderParticles = () => {
+                for (let i = 0; i < 50; i++) {
+                    const particle = document.createElement('div');
+                    particle.className = 'particle';
+                    const size = Math.random() * 4 + 1;
+                    particle.style.width = `${size}px`;
+                    particle.style.height = `${size}px`;
+                    particle.style.left = `${Math.random() * 100}%`;
+                    particle.style.top = `${Math.random() * 100}%`;
+                    particle.style.animationDuration = `${Math.random() * 20 + 10}s`;
+                    particle.style.animationDelay = `${Math.random() * -30}s`;
+                    domRefs.particlesContainer.appendChild(particle);
+                }
+            };
+
+            // --- LÓGICA DE ARRASTE DO CARROSSEL ---
+            let isDown = false;
+            let startX;
+            let scrollLeft;
+            let hasDragged = false;
+
+            const startDragging = (e) => {
+                isDown = true;
+                hasDragged = false;
+                domRefs.carouselContainer.classList.add('grabbing');
+                startX = e.pageX || e.touches[0].pageX - domRefs.carouselContainer.offsetLeft;
+                scrollLeft = domRefs.carouselContainer.scrollLeft;
+                if (carouselInterval) clearInterval(carouselInterval);
+            };
+
+            const stopDragging = () => {
+                isDown = false;
+                domRefs.carouselContainer.classList.remove('grabbing');
+                // Reinicia o carrossel automático apenas se houver mais slides do que o visível
+                const carouselEvents = events.filter(event => event.destaque.toLowerCase() === 's');
+                const numVisibleSlides = window.innerWidth <= 640 ? 1 : (window.innerWidth <= 1024 ? 2 : 3);
+                if (carouselEvents.length > numVisibleSlides) {
+                    if (carouselInterval) clearInterval(carouselInterval);
+                    carouselInterval = setInterval(() => {
+                        // Reutiliza a lógica de avançar, mas com scroll
+                        const container = domRefs.carouselContainer;
+                        const slideWidth = container.scrollWidth / domRefs.carouselWrapper.children.length;
+                        let nextScroll = container.scrollLeft + slideWidth;
+                        if (nextScroll >= container.scrollWidth - container.clientWidth) {
+                            nextScroll = 0; // Volta para o início
+                        }
+                        container.scrollTo({ left: nextScroll, behavior: 'smooth' });
+                    }, 3000);
+                }
+            };
+
+            const whileDragging = (e) => {
+                if (!isDown) return;
+                e.preventDefault();
+                hasDragged = true;
+                const x = e.pageX || e.touches[0].pageX - domRefs.carouselContainer.offsetLeft;
+                const walk = (x - startX) * 2; // Multiplicador para acelerar o arraste
+                domRefs.carouselContainer.scrollLeft = scrollLeft - walk;
+            };
+
+            // INICIA APLICAÇÃO E EVENTOS
+            domRefs.addGameBtn.onclick = openAddGameModal;
+            domRefs.cancelAddGameBtn.onclick = closeAddGameModal;
+            domRefs.addGameForm.onsubmit = handleAddGameSubmit;
+            domRefs.addGameForm.querySelector('[name="provedor"]').onchange = handleProviderSelection;
+            domRefs.prevBtn.onclick = () => { currentDate.setMonth(currentDate.getMonth() - 2); renderCalendars(); };
+            domRefs.nextBtn.onclick = () => { currentDate.setMonth(currentDate.getMonth() + 2); renderCalendars(); };
+            domRefs.todayBtn.onclick = () => { currentDate = new Date(); renderCalendars(); };
+            domRefs.modal.onclick = (e) => { if (e.target === domRefs.modal) closeModal(); };
+            domRefs.searchInput.oninput = handleSearchInput;
+            domRefs.autocompleteList.onclick = handleSuggestionClick;
+            domRefs.toggleFilterBtn.onclick = () => {
+                domRefs.filterOptions.classList.toggle('hidden');
+                domRefs.filterChevron.classList.toggle('rotate-180');
+            };
+            
+            // MUDANÇA: Substituído evento de clique por eventos de arraste
+            domRefs.carouselContainer.addEventListener('mousedown', startDragging);
+            domRefs.carouselContainer.addEventListener('mouseleave', stopDragging);
+            domRefs.carouselContainer.addEventListener('mouseup', stopDragging);
+            domRefs.carouselContainer.addEventListener('mousemove', whileDragging);
+            domRefs.carouselContainer.addEventListener('touchstart', startDragging);
+            domRefs.carouselContainer.addEventListener('touchend', stopDragging);
+            domRefs.carouselContainer.addEventListener('touchmove', whileDragging);
+            domRefs.carouselContainer.addEventListener('click', (e) => {
+                if(hasDragged) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                } else {
+                    handleCarouselClick(e);
+                }
+            }, true);
+            
+            window.addEventListener('resize', renderCarousel);
+
+            document.onclick = (e) => { 
+                if (!e.target.closest('.relative')) domRefs.autocompleteList.classList.add('hidden');
+                if (!domRefs.toggleFilterBtn.contains(e.target) && !domRefs.filterOptions.contains(e.target)) {
+                    domRefs.filterOptions.classList.add('hidden');
+                    domRefs.filterChevron.classList.remove('rotate-180');
+                }
+            };
+
+            renderParticles();
+            fetchData();
+        });
+    </script>
+</body>
+</html>
