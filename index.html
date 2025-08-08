@@ -333,7 +333,7 @@
                         <span>${label}: ${text}</span>
                     </div>`;
                 
-                const activeInfo = statusHTML('Ativo na H2Bet', event.activeOnSite.toLowerCase() === 'sim' ? 'Sim' : 'Não', event.activeOnSite.toLowerCase() === 'sim', 'Ativo no site?');
+                const activeInfo = statusHTML('Ativo na SeuBet', event.activeOnSite.toLowerCase() === 'sim' ? 'Sim' : 'Não', event.activeOnSite.toLowerCase() === 'sim', 'Ativo no site?');
                 const certInfo = statusHTML('Certificado', event.certificate.toLowerCase() === 'sim' ? 'Sim' : 'Não', event.certificate.toLowerCase() === 'sim', 'Certificado');
                 const isHighlight = event.destaque && event.destaque.toLowerCase() === 's';
                 const destaqueInfo = statusHTML('Destaque', isHighlight ? 'Sim' : 'Não', isHighlight, 'Destaque', 'S', 'N');
